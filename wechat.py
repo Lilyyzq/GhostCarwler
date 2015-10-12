@@ -10,6 +10,7 @@ import poster
 import re
 import os
 import time
+from PIL import Image
 
 #在txt中检测图片是否已经上传过
 def is_upload(path):
@@ -64,6 +65,7 @@ def upload_img(cj,path,ticket,token):
 		#记录下成功上传的file_id
 		return ret3content['content']
 	else:
+		print 'upload image error %s' % path
 		return 'error'
 		
 		
@@ -92,7 +94,7 @@ ret = urllib2.urlopen(req)
 retread = ret.read()
 retcontent = json.loads(retread)
 print retcontent['base_resp']['err_msg']
-RedirectUrl = retcontent['redirect_url']
+#RedirectUrl = retcontent['redirect_url']
 #token = RedirectUrl.split('token=')[1]
 token = retcontent['redirect_url'][44:]
 print token
@@ -147,7 +149,8 @@ for fn in file_name:
 	if os.path.isdir(fn):
 		folder_name.append(fn)
 
-up_list = []	#用于存储成功上传的图片的file_id		
+up_list = []	#用于存储成功上传的图片的file_id
+image_size = []	#用于存储成功上传的图片的尺寸		
 for folder in folder_name:
 	#在每个文件夹下找到图片名的集合
 	sub_dir = os.path.join(os.getcwd(),folder)
@@ -157,20 +160,47 @@ for folder in folder_name:
 		up_dir = os.path.join(sub_dir,img)
 		#print up_dir
 		if is_upload(up_dir) == 0:
-			up_list.append(upload_img(cj,up_dir,ticket[0],token))
-			time.sleep(1)
+			file_id = upload_img(cj,up_dir,ticket[0],token)
+			if file_id != 'error':
+				up_list.append(file_id)
+				img = Image.open(up_dir)
+				image_size.append(img.size[0])
+				time.sleep(1)
 
 total = len(up_list)	#本次成功上传图片总数，去构建若干URL找到图片地址
-n = total/50 + 1	#图片库页面最多可容纳50张图片
+if total != 0:
+	n = total/50 + 1	#图片库页面最多可容纳50张图片
+else:
+	n = 0
 i = 0
+up_list.reverse()
+k = 0	#记录查找的图片计数
+img_down = []	#存储找到的图片地址
 while i < n:
 	begin = i * 50	
 	image_page_url = 'https://mp.weixin.qq.com/cgi-bin/filepage?type=2&begin=' + str(begin) + '&count=50&t=media/img_list&token=' + token + '&lang=zh_CN'
-	req_image_page = urllib2.urlopen(image_page_url)
+	req_image_page = urllib2.Request(image_page_url)
 	#http头只添加user_agent试试
 	req_image_page.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
 	ret_image_page = urllib2.urlopen(req_image_page)
 	image_page = ret_image_page.read()
 	#找到每张图片的地址，需要up_list倒序
+	j = 0	#
+	while (j<50 and k<total):
+		re2 = r'"file_id":%s,.+?"cdn_url":"(.+?)","img_format"' % up_list[k]
+		re2_comp = re.compile(re2)
+		img_down.append(re.findall(re2_comp,image_page)[0])
+		j += 1
+		k += 1
+	i += 1
+
+print img_down
+img_down.reverse()
+artical_content0 = '<p>正文待替换</p>'
+i = 1
+while i < total:
+	down_str = 
+	
+artical_paras = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.43593453895300627,'AppMsgId':'','count':1,'title0':'标题待替换','content0':artical_content,'digest0':'摘要待替换','author0':'作者待替换','fileid0':up_list[-1],'music_id0':'','video_id0':'','show_cover_pic0':1,'shortvideofileid0':'','copyright_type0':0,'can_reward0':0,'reward_wording0':'','need_open_comment0':0,'sourceurl0':'','vid':''}
 
 
