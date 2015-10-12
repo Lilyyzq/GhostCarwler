@@ -11,10 +11,24 @@ import re
 import os
 import time
 
+#在txt中检测图片是否已经上传过
+def is_upload(path):
+	fr = open('upload.txt','r')
+	#return 1 for record in fr if record.strip() == path
+	for record in fr:
+		if record.strip() == path:
+			return 1
+	return 0
+
+
+#上传图片
 def upload_img(cj,path,ticket,token):		
 	opener = poster.streaminghttp.register_openers()  
 	opener.add_handler(urllib2.HTTPCookieProcessor(cj))		
-	datagen,headers = multipart_encode({'file':open(path,'rb')})
+	try:
+		datagen,headers = multipart_encode({'file':open(path,'rb')})
+	except:
+		return
 	#print datagen
 	#print headers
 	uploadUrl = 'https://mp.weixin.qq.com/cgi-bin/filetransfer?action=upload_material&f=json&writetype=doublewrite&groupid=1&ticket_id=xiuseyizhan&ticket=' + ticket + '&token=' + token + '&lang=zh_CN'
@@ -38,16 +52,28 @@ def upload_img(cj,path,ticket,token):
 		except urllib2.HTTPError,e:
 			print str(e)
 		except urllib2.URLError,e:
-			print str(e)			
-	print ret3.read()
+			print str(e)	
+	content3 = ret3.read()
+	print content3
+	ret3content = json.loads(content3)	
+	if ret3content['base_resp']['err_msg'] == 'ok':
+		#把成功上传的文件名写入到一个txt中
+		fw = open('upload.txt','a')
+		fw.write(path + '\n')
+		fw.close()
+		#记录下成功上传的file_id
+		return ret3content['content']
+	else:
+		return 'error'
+		
+		
+	
 	
 
 cj = cookielib.LWPCookieJar()
-print cj
 opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
 urllib2.install_opener(opener)
 
-print cj
 paras = {'username':'strwolf@163.com','pwd':'76a22e07a46aea62ef5b6cfd11191c46','imgcode':'','f':'json'}
 req = urllib2.Request('https://mp.weixin.qq.com/cgi-bin/login',urllib.urlencode(paras))
 req.add_header('Accept','*/*')
@@ -71,7 +97,7 @@ RedirectUrl = retcontent['redirect_url']
 token = retcontent['redirect_url'][44:]
 print token
 
-print cj
+'''
 paras2 = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.3910328117199242,'type':1,'content':'中文测试','tofakeid':'2302469181','imgcode':''}
 #print paras2
 msgUrl = 'https://mp.weixin.qq.com/cgi-bin/singlesend?t=ajax-response&f=json&token=' + token + '&lang=zh_CN'
@@ -91,14 +117,14 @@ req2.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/53
 req2.add_header('X-Requested-With','XMLHttpRequest')
 ret2 = urllib2.urlopen(req2)
 print ret2.read()
+'''
 
-
-
+#随意访问一个登陆后的页面获取ticket，用于后面构建上传图片的目标URL
 ticketUrl = 'https://mp.weixin.qq.com/cgi-bin/filepage?type=2&begin=0&count=12&t=media/img_list&token=' + token + '&lang=zh_CN'
 Referer_ticket = 'https://mp.weixin.qq.com/cgi-bin/appmsg?begin=0&count=10&t=media/appmsg_list&type=10&action=list_card&lang=zh_CN&token=' + token
 req_ticket = urllib2.Request(ticketUrl)
 req_ticket.add_header('Accept','text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8')
-#req_ticket.add_header('Accept-Encoding','gzip, deflate, sdch')
+#req_ticket.add_header('Accept-Encoding','gzip, deflate, sdch')	#不要去传这个参数，否则urlopen.read()会是gzip压缩后的
 req_ticket.add_header('Accept-Language','en-US,en;q=0.8')
 req_ticket.add_header('Connection','keep-alive')
 req_ticket.add_header('Host','mp.weixin.qq.com')
@@ -113,13 +139,6 @@ ticket = re.findall(ticket_re,page)
 print ticket[0]
 
 
-
-
-
-
-
-
-
 #register_openers()
 #获取图片路径
 file_name = os.listdir(os.getcwd())
@@ -128,6 +147,7 @@ for fn in file_name:
 	if os.path.isdir(fn):
 		folder_name.append(fn)
 
+up_list = []	#用于存储成功上传的图片的file_id		
 for folder in folder_name:
 	#在每个文件夹下找到图片名的集合
 	sub_dir = os.path.join(os.getcwd(),folder)
@@ -136,7 +156,21 @@ for folder in folder_name:
 	for img in img_name:
 		up_dir = os.path.join(sub_dir,img)
 		#print up_dir
-		upload_img(cj,up_dir,ticket[0],token)
-		time.sleep(1)
+		if is_upload(up_dir) == 0:
+			up_list.append(upload_img(cj,up_dir,ticket[0],token))
+			time.sleep(1)
+
+total = len(up_list)	#本次成功上传图片总数，去构建若干URL找到图片地址
+n = total/50 + 1	#图片库页面最多可容纳50张图片
+i = 0
+while i < n:
+	begin = i * 50	
+	image_page_url = 'https://mp.weixin.qq.com/cgi-bin/filepage?type=2&begin=' + str(begin) + '&count=50&t=media/img_list&token=' + token + '&lang=zh_CN'
+	req_image_page = urllib2.urlopen(image_page_url)
+	#http头只添加user_agent试试
+	req_image_page.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
+	ret_image_page = urllib2.urlopen(req_image_page)
+	image_page = ret_image_page.read()
+	#找到每张图片的地址，需要up_list倒序
 
 
