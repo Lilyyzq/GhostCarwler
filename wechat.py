@@ -150,7 +150,7 @@ for fn in file_name:
 		folder_name.append(fn)
 
 up_list = []	#用于存储成功上传的图片的file_id
-image_size = []	#用于存储成功上传的图片的尺寸		
+data_ratio = []	#用于存储成功上传的图片的比例参数		
 for folder in folder_name:
 	#在每个文件夹下找到图片名的集合
 	sub_dir = os.path.join(os.getcwd(),folder)
@@ -164,7 +164,10 @@ for folder in folder_name:
 			if file_id != 'error':
 				up_list.append(file_id)
 				img = Image.open(up_dir)
-				image_size.append(img.size[0])
+				if img.size[0]==1600:
+					data_ratio.append('1.5')
+				else:
+					data_ratio.append('0.66600790513834')
 				time.sleep(1)
 
 total = len(up_list)	#本次成功上传图片总数，去构建若干URL找到图片地址
@@ -193,14 +196,80 @@ while i < n:
 		j += 1
 		k += 1
 	i += 1
-
-print img_down
-img_down.reverse()
-artical_content0 = '<p>正文待替换</p>'
+#把\/变成/
+img_down_fix = []
+for img in img_down:
+	img_down_fix.append(img.replace('\\/','/'))
+print img_down_fix
+img_down_fix.reverse()
+artical_content = '<p>正文待替换</p>'
 i = 1
 while i < total:
-	down_str = 
-	
-artical_paras = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.43593453895300627,'AppMsgId':'','count':1,'title0':'标题待替换','content0':artical_content,'digest0':'摘要待替换','author0':'作者待替换','fileid0':up_list[-1],'music_id0':'','video_id0':'','show_cover_pic0':1,'shortvideofileid0':'','copyright_type0':0,'can_reward0':0,'reward_wording0':'','need_open_comment0':0,'sourceurl0':'','vid':''}
+	down_str = '<p><img data-s=\"300,640\" data-type=\"jpeg\" data-src=\"' + img_down_fix[i] + '\" style=\"\" data-ratio=\"' + data_ratio[i] + '\" data-w=\"\"/></p>'
+	artical_content += down_str
+	i += 1
+artical_content += '<p><br/></p><p><br/></p>'
 
+#做测试，参数int和str是否影响，似乎并不影响
+artical_paras = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.43593453895300627,'AppMsgId':'','count':1,'title0':'标题待替换','content0':artical_content,'digest0':'摘要待替换','author0':'作者待替换','fileid0':up_list[-1],'music_id0':'','video_id0':'','show_cover_pic0':1,'shortvideofileid0':'','copyright_type0':0,'can_reward0':0,'reward_wording0':'','need_open_comment0':0,'sourceurl0':'','vid':''}
+artical_url = 'https://mp.weixin.qq.com/cgi-bin/operate_appmsg?t=ajax-response&sub=create&type=10&token=' + token + '&lang=zh_CN'
+Referer = 'https://mp.weixin.qq.com/cgi-bin/appmsg?t=media/appmsg_edit&action=edit&isMul=1&isNew=1&type=10&lang=zh_CN&token=' + token
+req_artical = urllib2.Request(artical_url,urllib.urlencode(artical_paras))
+req_artical.add_header('Referer',Referer)
+req_artical.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
+ret_artical = urllib2.urlopen(req_artical)
+arti_content = ret_artical.read()
+print arti_content
+arti_dict = json.loads(arti_content)
+#返回中找到appMsgId
+appmsgid = arti_dict['appMsgId']
+print appmsgid
+#找到opreation_seq参数
+op_url = 'https://mp.weixin.qq.com/cgi-bin/masssendpage?t=mass/send&token=' + token + '&lang=zh_CN'
+req_op = urllib2.Request(op_url)
+req_op.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
+ret_op = urllib2.urlopen(req_op)
+op_page = ret_op.read()
+re_op = r'operation_seq: "(.+?)"'
+re_op_comp = re.compile(re_op)
+operation_seq = re.findall(re_op_comp,op_page)[0]
+
+print operation_seq
+#去访问前一步,'direct_send':1
+AllMsg_url = 'https://mp.weixin.qq.com/cgi-bin/masssend?t=ajax-response&token=' + token + '&lang=zh_CN'
+AllMsg_paras = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.4500490468926728,'type':10,'appmsgid':appmsgid,'cardlimit':1,'sex':0,'groupid':-1,'synctxweibo':0,'country':'','province':'','city':'','imgcode':'','operation_seq':operation_seq}
+print urllib.urlencode(AllMsg_paras)
+Referer = 'https://mp.weixin.qq.com/cgi-bin/masssendpage?t=mass/send&token=' + token + '&lang=zh_CN'
+req_am = urllib2.Request(AllMsg_url,urllib.urlencode(AllMsg_paras))
+req_am.add_header('Accept','application/json, text/javascript, */*; q=0.01')
+req_am.add_header('Accept-Encoding','gzip, deflate')
+req_am.add_header('Accept-Language','zh-CN,zh;q=0.8')
+req_am.add_header('Connection','keep-alive')
+req_am.add_header('Content-Type','application/x-www-form-urlencoded; charset=UTF-8')
+req_am.add_header('Host','mp.weixin.qq.com')
+req_am.add_header('Origin','https://mp.weixin.qq.com')
+req_am.add_header('Referer',Referer)
+req_am.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
+req_am.add_header('X-Requested-With','XMLHttpRequest')
+ret_am = urllib2.urlopen(req_am)
+print ret_am.read()
+
+#我猜测是要分两步，应该要成功了
+AllMsg_url = 'https://mp.weixin.qq.com/cgi-bin/masssend?t=ajax-response&token=' + token + '&lang=zh_CN'
+AllMsg_paras = {'token':token,'lang':'zh_CN','f':'json','ajax':1,'random':0.4500490468926728,'type':10,'appmsgid':appmsgid,'cardlimit':1,'sex':0,'groupid':-1,'synctxweibo':0,'country':'','province':'','city':'','imgcode':'','operation_seq':operation_seq,'direct_send':1}
+print urllib.urlencode(AllMsg_paras)
+Referer = 'https://mp.weixin.qq.com/cgi-bin/masssendpage?t=mass/send&token=' + token + '&lang=zh_CN'
+req_am = urllib2.Request(AllMsg_url,urllib.urlencode(AllMsg_paras))
+req_am.add_header('Accept','application/json, text/javascript, */*; q=0.01')
+req_am.add_header('Accept-Encoding','gzip, deflate')
+req_am.add_header('Accept-Language','zh-CN,zh;q=0.8')
+req_am.add_header('Connection','keep-alive')
+req_am.add_header('Content-Type','application/x-www-form-urlencoded; charset=UTF-8')
+req_am.add_header('Host','mp.weixin.qq.com')
+req_am.add_header('Origin','https://mp.weixin.qq.com')
+req_am.add_header('Referer',Referer)
+req_am.add_header('User-Agent','Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.93 Safari/537.36')
+req_am.add_header('X-Requested-With','XMLHttpRequest')
+ret_am = urllib2.urlopen(req_am)
+print ret_am.read()
 
